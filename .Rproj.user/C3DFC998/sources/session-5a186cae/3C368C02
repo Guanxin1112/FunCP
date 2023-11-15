@@ -1,0 +1,26 @@
+{
+    "id": "3C368C02",
+    "path": "~/Documents/mypkg/FunCP/R/simdata.R",
+    "project_path": "R/simdata.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1699949900744.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "22,32",
+        "scrollLine": "8"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1699964527,
+    "encoding": "GB18030",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1699964527108,
+    "read_only": false,
+    "read_only_alternatives": []
+}

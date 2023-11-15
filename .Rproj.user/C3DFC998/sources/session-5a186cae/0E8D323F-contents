@@ -1,0 +1,11 @@
+Package: FunCP
+Type: Package
+Title: What the Package Does (Title Case)
+Version: 0.1.0
+Author: Guanxin wrote it
+Maintainer: The package maintainer <guanxin1112@163.com>
+Description: More about what it does (maybe more than one line)
+    Use four spaces when indenting paragraphs within the Description.
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true

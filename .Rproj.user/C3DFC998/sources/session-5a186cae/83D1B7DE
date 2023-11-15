@@ -1,0 +1,27 @@
+{
+    "id": "83D1B7DE",
+    "path": "~/Documents/mypkg/FunCP/R/smooth_weightls.R",
+    "project_path": "R/smooth_weightls.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1699965428262.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "284,1",
+        "scrollLine": "21"
+    },
+    "folds": "47|59|284|0|\n",
+    "lastKnownWriteTime": 1699965764,
+    "encoding": "GB18030",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1699965764065,
+    "read_only": false,
+    "read_only_alternatives": []
+}

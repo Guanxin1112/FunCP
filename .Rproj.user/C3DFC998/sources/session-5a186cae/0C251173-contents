@@ -1,0 +1,13 @@
+Package: FunCP
+Type: Package
+Title: What the Package Does (Title Case)
+Version: 1.1.0
+Author: Guanxin wrote it
+Maintainer: The package maintainer <guanxin1112@163.com>
+Description: More about what it does (maybe more than one line)
+    Use four spaces when indenting paragraphs within the Description.
+License: GPL (>= 2.0)
+LazyData: TRUE
+Depends: R (>= 3.6.0), MASS
+Encoding: UTF-8
+RoxygenNote: 7.2.3

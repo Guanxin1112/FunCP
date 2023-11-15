@@ -1,0 +1,27 @@
+{
+    "id": "212563F2",
+    "path": "~/Documents/mypkg/FunCP/R/smooth_ls.R",
+    "project_path": "R/smooth_ls.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1699963366640.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "83,13",
+        "scrollLine": "72"
+    },
+    "folds": "54|27|58|2|\n",
+    "lastKnownWriteTime": 1699965187,
+    "encoding": "GB18030",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1699965798970,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,339 @@
+rm(list=ls())
+
+library(MASS)
+library(Matrix)
+library(splines)
+
+alpha1.fun<-function(u)  sin(sqrt(2)*pi*u)
+
+simdata1<-function(n, oo, beta0, gamma0, tau, modtype, errtype){
+  ### calculate the true expectile by zhangfeipeng2016
+  pefun <- function(t, errtype){
+    
+    if (errtype==1){
+      ## example1: normal distribution
+      F <- pnorm(t, 0, 1)
+      
+      integrand <- function(x) {x*dnorm(x, 0, 1)}
+      
+    } else if (errtype==2){
+      ## example2: t4 distribution
+      F <- pt(t, 4)
+      
+      integrand <- function(x) {x*dt(x, 4)}
+      
+    } else if (errtype==3) {
+      ## example3: mixtrue distribution of normal distributions
+      prop <- 0.1  # mixture proportion
+      F <- prop * pt(t, 4) + (1-prop)*pnorm(t, 0, 1)
+      
+      integrand <- function(x){
+        x*(prop * dt(x, 4) +  (1-prop)*dnorm(x, 0, 1))
+      }
+    }
+    
+    G <- integrate(integrand, lower = -(1e+3), upper = t)$value
+    gmean <-  integrate(integrand, lower = -(1e+3), upper = 1e+3)$value
+    u <- G -t * F
+    asy <- u/(2*u + t-gmean)
+    
+    return(asy)
+  }
+  
+  efun <- function (tau, errtype){
+    tau[tau > 1 | tau < 0] = NA
+    zz = 0 * tau
+    lower = rep(-10, length(tau))
+    upper = rep(10, length(tau))
+    diff = 1
+    index = 1
+    while (diff > 1e-10 && index < 1000) {
+      root = pefun(zz, errtype) - tau
+      root[is.na(root)] = 0
+      lower[root < 0] = zz[root < 0]
+      upper[root > 0] = zz[root > 0]
+      zz = (upper + lower)/2
+      diff = max(abs(root), na.rm = T)
+      index = index + 1
+    }
+    zz[is.na(tau)] = NA
+    return(zz)
+  }
+  
+  ### parameter settings
+  X1 = rnorm(n, 0, 1)
+  Z = rnorm(n, 0, 1)
+ 
+  Q = runif(n, 0, 1)  #rnorm(n, 0, 1)# threshold variable
+  ind = (Q - gamma0 > 0) # sum(ind)/n
+  
+  U = runif(n,0,2) 
+  alpha = alpha1.fun(U)
+  X = cbind(rep(1,n), X1, U)
+  
+  temy = X %*% beta0 + c(X[,oo] * delta0) * as.numeric(ind) + Z * alpha
+  
+  if (errtype==1){
+    ## example1: normal distribution
+    err <- rnorm(n, 0, 0.5)    # normal distribution
+  } else if (errtype==2){
+    ## example2: t4 distribution
+    err <- rt(n, 4)
+  } else if (errtype==3) {
+    ## example3: mixtrue distribution of normal distributions
+    prop <- 0.1  # mixture proportion of t4 distribution
+    B <- rbinom(n, 1, prop)
+    err <-  (B==1)* rt(n, 4) +  (B==0)*rnorm(n, 0, 1)
+  }
+  
+  err0 <- err - efun(tau, errtype)   # the tau-th expectile of err is zero
+  
+  if (modtype == 1){
+    Y <- temy + err0
+  } else if (modtype == 2){
+    Y <- temy + (1 + 0.3*X[,2])*err0
+  }
+  
+  # Y = rep(0, n)
+  # for(i in n){
+  #   tem1 = t(X[i,]) %*% beta0
+  #   tem2 = t(Z[i,]) %*% alpha[i,]
+  #   Y[i] = tem1 * as.numeric(ind[i]) + tem2 + eps[i]
+  # }
+  return(list(Y=Y, X=X, Z=Z, U=U, Q=Q))
+}
+
+
+Gsmooth<-function(u, h){
+  #kerf<-function(s)  {(1/sqrt(2*pi)) * exp(-s^2/2)}
+  #integrate(kerf, lower =-1000, upper = xx/h, abs.tol = 0L)$value
+  pnorm(u/h) + (u/h)*dnorm(u/h)
+}
+
+
+weight_fun<-function(u, tau){  ifelse(u >= 0, tau*(u^2), (1-tau)*(u^2))  }
+
+
+est_fun<-function(oo, U, Q, X, Z, Y, tau, q, h){
+  
+  n = dim(X)[1]
+  d = dim(X)[2]
+  p = 1#dim(Z)[2]
+  
+  # kl=min(U)+(max(U)-min(U)+0.0001)*(0:(N+1))/(N+1)
+  # kl=c(seq(min(U),min(U), length = (p-1)),kl,seq(max(U),max(U), length = (p-1)))
+  # Basis=splineDesign(knots=kl, x=U,ord = p)
+  ww = rep(0, k1)  
+  for(j in 1:k1){ ww[j] = quantile(sort(U), j/(k1+1))}
+  b = max(U) + 10^(-10)
+  a = min(U) - 10^(-10)
+  kw = c(rep(a,q),t(ww),rep(b,q))
+  Bp  = splineDesign(knots = kw, x=U, ord = q)
+  N = ncol(Bp)
+  
+  WZ = NULL
+  for(i in 1:n){
+    temp1 = kronecker(Z[i], Bp[i,], FUN = "*")
+    WZ = rbind(WZ, temp1)
+  }
+  
+  # D1 = array(0, dim=c(d+length(oo)+N*p, d+length(oo)+N*p, n))
+  # D2 = matrix(0, nrow=d+length(oo)+N*p, ncol=n)
+  
+  theta.ini = rep(0, d + length(oo) + N*p)
+  gamma.ini = mean(U)
+  iter = 0
+  tol = 10
+  while(iter<20 & tol>1e-6){
+    
+    #WX = X * Gsmooth((Q - gamma.ini), h)
+    WX = X[,oo] * ((Q - gamma.ini)>0)
+    W = cbind(X, WX, WZ)
+    
+    Ypred = W %*% theta.ini
+    dweight = as.vector(tau *(Y >= Ypred) + (1-tau)* (Y<Ypred))
+    theta.new = lsfit(W, Y, wt = dweight, intercept = FALSE)$coef
+    
+    # reshat = Y - Ypred
+    # #dweight = weight_fun(reshat,tau)
+    # 
+    # for(i in 1:n){
+    #   D1[,,i] = W[i,] %*% t(W[i,]) * dweight[i]
+    #   D2[,i] = W[i,] * Y[i] * dweight[i]
+    # }
+    # theta.new = ginv(apply(D1,c(1,2),sum)) %*% apply(D2,1,sum)
+    
+    tol1 = max(abs(theta.new - theta.ini))
+    
+    theta.ini = theta.new
+    
+    fn<-function(xx){
+      #WXtemp = X * Gsmooth((Q - xx), h)
+      WXtemp = X[,oo] * ((Q - xx) >0)
+      Wtemp = cbind(X, WXtemp, WZ)
+      Yhat = Wtemp %*% theta.ini
+      res = as.vector(Y-Yhat)
+      rss = weight_fun(res, tau) 
+      sum(rss)
+    }
+    
+    R = optimize(fn, interval=c(-1,1))   
+    #R = optim(par=gamma.ini, fn=fn,gr=NULL)    
+    gamma.new = R$minimum
+    tol2 = max(abs(gamma.new - gamma.ini))
+    
+    gamma.ini = gamma.new
+    iter = iter + 1
+    tol = max(tol1, tol2)
+  }
+  
+  beta.hat = theta.ini[1:d]
+  delta.hat = theta.ini[(d+1):(d+length(oo))]
+  
+  alpha1.hat = Bp %*% theta.ini[(d+length(oo)+1):(d+length(oo)+N)]
+  RMSE1 = sqrt(mean((alpha1.fun(U)-alpha1.hat)^2))
+
+  # cat("beta.true : ", beta0, "\n", "beta.estimate : ", beta.hat, "\n")
+  # cat("delta.true : ", delta0, "\n", "delta.estimate : ", delta.hat, "\n")
+  # cat("gamma.true : ", gamma0,"\n","gamma.estimate : ", gamma.ini)
+  # 
+  # plot(sort(U), alpha1.hat[order(U)],type='l')
+  # lines(sort(U), alpha1.fun(sort(U)),col='red')
+  
+  return(list(beta.hat = beta.hat, delta.hat = delta.hat,
+              gamma.hat = gamma.ini, alpha1.hat = alpha1.hat,
+              RMSE1=RMSE1))
+  
+}
+
+
+sim_fun<-function(repetition,n, oo, beta0, gamma0, tau, q, h, modtype, errtype){
+  data = simdata1(n, oo, beta0, gamma0, tau, modtype, errtype)
+  X=data$X; Y=data$Y; U=data$U; Z=data$Z; Q = data$Q
+  result = est_fun(oo, U, Q, X, Z, Y, tau, q, h)
+  
+  #parameter
+  est_gamma = result$gamma.hat
+  est_beta = result$beta.hat
+  est_delta = result$delta.hat 
+  
+  accuracy = mean(c(Q > gamma0)==c(Q > est_gamma))
+  
+  ##function
+  RMSE1 = result$RMSE1 
+
+  list(est_gamma=est_gamma,est_beta=est_beta,est_delta = est_delta,
+       accuracy = accuracy,
+       RMSE1 = RMSE1)
+}
+
+
+beta0 = c(1, 1, 1)
+delta0 = -1
+gamma0 = 0.5
+oo = 2
+nsample = c(200, 500)
+q = 4 ### q is spline order 
+k1 = 3 # k1 is the number of knots
+tauseq = c(0.05, 0.25, 0.5, 0.75, 0.95)
+#h = log(n)*n^(-0.5) 
+
+modtype=1
+errtype=3
+
+t0 = Sys.time()
+simN = 1000
+for(j in 1:length(tauseq)){
+  for(i in 1:length(nsample)){
+    output = NULL
+    for(ns in 1:simN){
+      simres = sim_fun(repetition=ns, n=nsample[i], oo, beta0, gamma0, tau=tauseq[j], q, h, modtype, errtype)
+      output = cbind(output, simres)
+    }
+    saveRDS(output, paste0("", nsample[i], "_", tauseq[j], "_", modtype,"_", errtype, ".rds"))
+  }
+}
+Sys.time() - t0
+
+est_gamma = RMSE1 = accuracy =  rep(0,simN)
+est_beta = matrix(0,simN,length(beta0))
+est_delta = matrix(0,simN,length(delta0))
+
+
+path = "/Users/guanxin/result"
+resultlist = list.files(path,pattern = ".rds") 
+length(resultlist)
+for(j in 1:10){
+  epath = paste0(path,'/',resultlist[j]); 
+  output_read = readRDS(epath)
+  for(ns in 1:simN){
+    est_gamma[ns] = output_read[,ns]$est_gamma
+    est_beta[ns,] = output_read[,ns]$est_beta
+    est_delta[ns,] = output_read[,ns]$est_delta
+    accuracy[ns,] = output_read[,ns]$accuracy
+    RMSE1[ns] = output_read[,ns]$RMSE1 
+  }
+  
+  print(resultlist[j])
+  cat("beta.estimate : ", apply(est_beta, 2, mean)-beta0 , "\n", apply(est_beta, 2, sd), "\n")
+  cat("delta.estimate : ", apply(est_delta,2,mean)-delta0, apply(est_delta,2,sd), "\n")
+  cat("gamma.estimate : ", mean(est_gamma)-gamma0,  sd(est_gamma), "\n")
+  cat("alpha : ", mean(RMSE1), sd(RMSE1), "\n")
+  print(mean(accuracy))
+}
+
+
+path = getwd()
+resultlist = list.files(path,pattern = ".rds") 
+
+result_beta = result_temp = result_delta = NULL
+
+est_gamma = RMSE1 =  rep(0,simN)
+est_beta = matrix(0,simN,length(beta0))
+est_delta = matrix(0,simN,length(delta0))
+
+for(j in 1:length(resultlist)){
+  
+  epath = paste0(path,'/',resultlist[j])
+  
+  output_read = readRDS(epath)
+  
+  out_info = strsplit(epath, split = "_")
+  
+  list_nsample = substr(out_info[[1]][1],start=nchar(out_info[[1]][1])-2,stop=nchar(out_info[[1]][1]))
+  
+  list_tauseq = substr(out_info[[1]][2],start=1,stop=nchar(out_info[[1]][2])-4)
+  
+  print(c(list_nsample,list_tauseq))
+  
+  result_output = output_read 
+  for(ns in 1:simN){
+    est_gamma[ns] = result_output[,ns]$est_gamma
+    est_beta[ns,] = result_output[,ns]$est_beta
+    est_delta[ns,] = result_output[,ns]$est_delta
+    RMSE1[ns] = result_output[,ns]$RMSE1 
+  }
+  
+  temp = data.frame(bias_gamma_mean = mean(est_gamma)-gamma0,
+                    est_gamma_sd = sd(est_gamma),
+                    RMSE1_mean = mean(RMSE1), RMSE1_sd = sd(RMSE1))
+  temp$n  = list_nsample
+  temp$tau  = list_tauseq
+  result_temp = rbind(result_temp, temp)
+  
+  ##beta
+  res_beta = data.frame(bias_beta_mean=apply(est_beta,2,mean)-beta0,
+                        est_beta_sd=apply(est_beta,2,sd))
+  res_beta$n  = list_nsample
+  res_beta$tau  = list_tauseq
+  result_beta = rbind(result_beta, res_beta)
+  
+  ##delta
+  res_delta = data.frame(bias_delta_mean=apply(est_delta,2,mean)-delta0,
+                         est_delta_sd=apply(est_delta,2,sd))
+  res_delta$n  = list_nsample
+  res_delta$tau  = list_tauseq
+  result_delta = rbind(result_delta, res_delta)
+  
+}  
+

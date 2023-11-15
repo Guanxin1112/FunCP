@@ -1,0 +1,10 @@
+library('devtools')
+library(roxygen2)
+has_devel()
+
+file.edit("DESCRIPTION")
+
+load_all()
+
+ls()
+package.skeleton(name="FunCP",list=ls())
